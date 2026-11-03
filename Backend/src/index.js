@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { addToCrwalQueue, addToIndexQueue, addToQueryQueue } from "./producers/index.producer.js";
 import { queryQueue } from "./queues/query.queue.js";
 import { indexQueue } from "./queues/index.queue.js";
-import { crawlWebsite } from "./utils/crawlWebsite.js";
+import { getYoutubeTranscript } from "./utils/youtubeTranscript.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadDir = path.join(__dirname, "..", "uploads");
@@ -124,7 +124,23 @@ indexRouter.post('/url', async (req, res) => {
     });
 
     } else if (youtubeUrl) {
-      console.log(youtubeUrl);
+
+      const transcript = await getYoutubeTranscript(youtubeUrl);
+
+      // const docs = [
+      //   new Document({
+      //     pageContent: transcript.text,
+      //     metadata: {
+      //       source: videoUrl,
+      //       type: "youtube",
+      //       language: transcript.language,
+      //     },
+      //   }),
+      // ];
+
+      // await indexDocuments(docs);
+
+      console.log(transcript.segments.length);
     } else {
       console.log(text);
     }
