@@ -4,7 +4,7 @@ import { QdrantVectorStore } from '@langchain/qdrant';
 import { serverConfig } from "../config/index.js";
 import { rankDocumentsRRF } from "./ranker.js";
 
-export async function queryFromSource(query) {
+export async function queryFromSource(query, conversationHistory = []) {
     // 1. Generate query variations
     const { stepBack, rewritten, subQueries } = await rewriteQuery(query);
     const hyde = await hydeDocument(query);
@@ -51,7 +51,19 @@ export async function queryFromSource(query) {
         .map((doc, index) => `[Document ${index + 1}]\n${doc.pageContent}`)
         .join('\n\n-------------------------\n\n');
 
-    const finalResponse = await getFinalResponse(context,query)
+    const priorMessages = Array.isArray(conversationHistory)
+        ? conversationHistory
+            .filter((message) => message && typeof message.content === 'string' && message.content.trim())
+            .map((message) => `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`)
+            .join('\n\n')
+        : '';
+
+    const finalResponse = await getFinalResponse(
+        context,
+        priorMessages
+            ? `Previous conversation:\n${priorMessages}\n\nCurrent question: ${query}`
+            : query
+    );
 
     return finalResponse
 }

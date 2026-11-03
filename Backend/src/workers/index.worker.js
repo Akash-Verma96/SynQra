@@ -47,7 +47,7 @@ export function setUpQUERYWorker(){
 
         console.log(`🔄 Processing Query : ${job.data.query}`);
 
-        const result = await queryFromSource(job.data.query);
+        const result = await queryFromSource(job.data.query, job.data.conversationHistory || []);
         console.log(result);
         return result;
     },{

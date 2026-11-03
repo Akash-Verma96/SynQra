@@ -269,6 +269,10 @@ indexRouter.post('/url', async (req, res) => {
 // --- POST /query : enqueue a RAG query job, return the job id to poll ---
 indexRouter.post("/query", async (req, res) => {
   const query = req.body?.query;
+  const conversationHistory = Array.isArray(req.body?.conversationHistory)
+    ? req.body.conversationHistory
+    : [];
+
   if (typeof query !== "string" || query.trim().length === 0) {
     return res
       .status(400)
@@ -276,7 +280,10 @@ indexRouter.post("/query", async (req, res) => {
   }
 
   try {
-    const job = await addToQueryQueue({ query: query.trim() });
+    const job = await addToQueryQueue({
+      query: query.trim(),
+      conversationHistory,
+    });
 
     return res.status(202).json({
       message: "Query queued",
