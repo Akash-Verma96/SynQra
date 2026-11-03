@@ -4,10 +4,9 @@ import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { addToCrwalQueue, addToIndexQueue, addToQueryQueue } from "./producers/index.producer.js";
+import { addToCrwalQueue, addToIndexQueue, addToQueryQueue, addToYtQueue } from "./producers/index.producer.js";
 import { queryQueue } from "./queues/query.queue.js";
 import { indexQueue } from "./queues/index.queue.js";
-import { getYoutubeTranscript } from "./utils/youtubeTranscript.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadDir = path.join(__dirname, "..", "uploads");
@@ -124,23 +123,17 @@ indexRouter.post('/url', async (req, res) => {
     });
 
     } else if (youtubeUrl) {
+      const job = await addToYtQueue({
+        url: youtubeUrl,
+      });
 
-      const transcript = await getYoutubeTranscript(youtubeUrl);
-
-      // const docs = [
-      //   new Document({
-      //     pageContent: transcript.text,
-      //     metadata: {
-      //       source: videoUrl,
-      //       type: "youtube",
-      //       language: transcript.language,
-      //     },
-      //   }),
-      // ];
-
-      // await indexDocuments(docs);
-
-      console.log(transcript.segments.length);
+      return res.status(202).json({
+        message: "Url uploaded and queued for Transcription",
+        jobId: job.id,
+        file: {
+          url: youtubeUrl
+        },
+      });
     } else {
       console.log(text);
     }
@@ -150,6 +143,9 @@ indexRouter.post('/url', async (req, res) => {
     res.status(500).json({ error: "Processing failed" });
   }
 });
+
+
+
 
 // --- POST /query : enqueue a RAG query job, return the job id to poll ---
 indexRouter.post("/query", async (req, res) => {

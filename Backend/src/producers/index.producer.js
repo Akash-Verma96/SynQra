@@ -1,11 +1,13 @@
 import { crawlQueue } from "../queues/crawler.queue.js";
 import { indexQueue } from "../queues/index.queue.js";
 import { queryQueue } from "../queues/query.queue.js";
+import { ytQueue } from "../queues/ytTranscript.queue.js";
 
 
 export const INDEX_PAYLOAD = 'index-payload:data';
 export const QUERY_PAYLOAD = 'query-payload:data';
 export const CRWAL_PAYLOAD = 'crwal-payload:data';
+export const YT_PAYLOAD = 'yt-payload:data';
 
 export const addToIndexQueue = async (data) =>{
     const job = await indexQueue.add(INDEX_PAYLOAD, data);
@@ -22,5 +24,11 @@ export const addToQueryQueue = async (data) =>{
 export const addToCrwalQueue = async(data) =>{
     const job = await crawlQueue.add(CRWAL_PAYLOAD,data);
     console.log(`✅ URL added to crawl queue`);
+    return job;
+}
+
+export const addToYtQueue = async(data) => {
+    const job = await ytQueue.add(YT_PAYLOAD,data);
+    console.log(`✅ URL added to YT transcript queue`);
     return job;
 }

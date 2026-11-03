@@ -3,7 +3,7 @@ import express, { json } from 'express'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { serverConfig } from './config/index.js'
-import { setUpCrwalWorker, setUpIndexWorker, setUpQUERYWorker } from './workers/index.worker.js';
+import { setUpCrwalWorker, setUpIndexWorker, setUpQUERYWorker, setUpYtWorker } from './workers/index.worker.js';
 import indexRouter from './index.js';
 
 const app = express()
@@ -30,5 +30,6 @@ app.listen(port,()=>{
     setUpIndexWorker();
     setUpQUERYWorker();
     setUpCrwalWorker();
+    setUpYtWorker();
     console.log(`Server is listening on port: ${port}`)
 })
