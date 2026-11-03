@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import { addToCrwalQueue, addToIndexQueue, addToQueryQueue, addToYtQueue } from "./producers/index.producer.js";
 import { queryQueue } from "./queues/query.queue.js";
 import { indexQueue } from "./queues/index.queue.js";
+import { Document } from "@langchain/core/documents";
+import { indexDocuments } from "./services/indexer.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadDir = path.join(__dirname, "..", "uploads");
@@ -135,12 +137,24 @@ indexRouter.post('/url', async (req, res) => {
         },
       });
     } else {
-      console.log(text);
+      const documents = [
+        new Document({
+        pageContent: text,
+        metadata: {
+          source: "user",
+          type: "text",
+        },
+        }),
+      ];
+              
+      const result = await indexDocuments(documents,{
+          metadata: documents.metadata
+      })
+
+      res.json({ message: "Content processed successfully",data: result });
     }
-    
-    res.json({ message: "Content processed successfully" });
   } catch (error) {
-    res.status(500).json({ error: "Processing failed" });
+    res.status(500).json({ message: "Processing failed", error: error.message });
   }
 });
 
