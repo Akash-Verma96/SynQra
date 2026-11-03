@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import { addToCrwalQueue, addToIndexQueue, addToQueryQueue, addToYtQueue } from "./producers/index.producer.js";
 import { queryQueue } from "./queues/query.queue.js";
 import { indexQueue } from "./queues/index.queue.js";
+import { crawlQueue } from "./queues/crawler.queue.js";
+import { ytQueue } from "./queues/ytTranscript.queue.js";
 import { Document } from "@langchain/core/documents";
 import { indexDocuments } from "./services/indexer.js";
 
@@ -45,6 +47,26 @@ const upload = multer({
   },
 });
 
+const fileUpload = multer({
+  storage,
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowedDocs = [
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "text/plain",
+    ];
+
+    if (allowedDocs.includes(file.mimetype) || file.mimetype.startsWith("image/")) {
+      return cb(null, true);
+    }
+
+    cb(new Error("Only PDF, DOCX, image, text, Excel, and PowerPoint files are allowed"));
+  },
+});
+
 const indexRouter = express.Router()
 indexRouter.use(express.json());
 
@@ -75,12 +97,48 @@ indexRouter.get("/index/:id", async (req, res) => {
   }
 });
 
-// --- POST /index : upload a PDF and enqueue an indexing job ---
-indexRouter.post("/index", upload.single("file"), async (req, res) => {
+// --- POST /index : upload one or more source files and enqueue indexing jobs ---
+indexRouter.post("/index", fileUpload.array("files", 10), async (req, res) => {
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({ error: "No files uploaded (field: 'files')" });
+  }
+
+  try {
+    const jobs = await Promise.all(
+      req.files.map(async (file) => {
+        const job = await addToIndexQueue({
+          filePath: file.path,
+          originalName: file.originalname,
+          mimeType: file.mimetype,
+          size: file.size,
+        });
+
+        return {
+          jobId: job.id,
+          file: {
+            originalName: file.originalname,
+            storedAs: file.filename,
+            size: file.size,
+            mimeType: file.mimetype,
+          },
+        };
+      }),
+    );
+
+    return res.status(202).json({
+      message: "Files uploaded and queued for indexing",
+      jobs,
+    });
+  } catch (err) {
+    console.error("Failed to enqueue indexing jobs:", err);
+    return res.status(500).json({ error: "Failed to queue files for indexing" });
+  }
+});
+
+// Legacy single-file fallback for compatibility with older clients.
+indexRouter.post("/index/single", upload.single("file"), async (req, res) => {
   if (!req.file) {
-    return res
-      .status(400)
-      .json({ error: "No PDF file uploaded (field: 'file')" });
+    return res.status(400).json({ error: "No file uploaded (field: 'file')" });
   }
 
   try {
@@ -106,60 +164,107 @@ indexRouter.post("/index", upload.single("file"), async (req, res) => {
   }
 });
 
+// --- GET /crawl/:id : poll for the status/result of a crawl job ---
+indexRouter.get("/crawl/:id", async (req, res) => {
+  try {
+    const job = await crawlQueue.getJob(req.params.id);
+    if (!job) {
+      return res.status(404).json({ error: "Job not found" });
+    }
+
+    const state = await job.getState();
+
+    if (state === "completed") {
+      return res.json({ jobId: job.id, status: state, result: job.returnvalue });
+    }
+    if (state === "failed") {
+      return res.status(200).json({ jobId: job.id, status: state, error: job.failedReason });
+    }
+
+    return res.json({ jobId: job.id, status: state });
+  } catch (err) {
+    console.error("Failed to fetch crawl job:", err);
+    return res.status(500).json({ error: "Failed to fetch crawl job" });
+  }
+});
+
+indexRouter.get("/youtube/:id", async (req, res) => {
+  try {
+    const job = await ytQueue.getJob(req.params.id);
+    if (!job) {
+      return res.status(404).json({ error: "Job not found" });
+    }
+
+    const state = await job.getState();
+
+    if (state === "completed") {
+      return res.json({ jobId: job.id, status: state, result: job.returnvalue });
+    }
+    if (state === "failed") {
+      return res.status(200).json({ jobId: job.id, status: state, error: job.failedReason });
+    }
+
+    return res.json({ jobId: job.id, status: state });
+  } catch (err) {
+    console.error("Failed to fetch YouTube job:", err);
+    return res.status(500).json({ error: "Failed to fetch YouTube job" });
+  }
+});
+
 indexRouter.post('/url', async (req, res) => {
-  const { websiteUrl, youtubeUrl, text } = req.body;
+  const { websiteUrl, youtubeUrl, text, sourceName } = req.body;
 
   try {
     if (websiteUrl) {
-      
       const job = await addToCrwalQueue({
         url: websiteUrl,
-      });
-
-    return res.status(202).json({
-      message: "Url uploaded and queued for crwaling",
-      jobId: job.id,
-      file: {
-        url: websiteUrl
-      },
-    });
-
-    } else if (youtubeUrl) {
-      const job = await addToYtQueue({
-        url: youtubeUrl,
+        sourceName: sourceName || websiteUrl,
       });
 
       return res.status(202).json({
-        message: "Url uploaded and queued for Transcription",
+        message: "Website URL uploaded and queued for crawling",
         jobId: job.id,
-        file: {
-          url: youtubeUrl
-        },
+        sourceType: 'website',
+        file: { url: websiteUrl }
       });
-    } else {
+    }
+
+    if (youtubeUrl) {
+      const job = await addToYtQueue({
+        url: youtubeUrl,
+        sourceName: sourceName || youtubeUrl,
+      });
+
+      return res.status(202).json({
+        message: "YouTube URL uploaded and queued for transcription",
+        jobId: job.id,
+        sourceType: 'youtube',
+        file: { url: youtubeUrl }
+      });
+    }
+
+    if (typeof text === 'string' && text.trim().length > 0) {
       const documents = [
         new Document({
-        pageContent: text,
-        metadata: {
-          source: "user",
-          type: "text",
-        },
+          pageContent: text,
+          metadata: {
+            source: 'user',
+            type: 'text',
+            sourceName: sourceName || 'Text snippet',
+          },
         }),
       ];
-              
-      const result = await indexDocuments(documents,{
-          metadata: documents.metadata
-      })
 
-      res.json({ message: "Content processed successfully",data: result });
+      const result = await indexDocuments(documents, { metadata: { source: 'user', type: 'text' } });
+
+      return res.json({ message: 'Content processed successfully', data: result, sourceType: 'text' });
     }
+
+    return res.status(400).json({ error: 'Provide a websiteUrl, youtubeUrl, or text payload' });
   } catch (error) {
     res.status(500).json({ message: "Processing failed", error: error.message });
   }
 });
-
-
-
 
 // --- POST /query : enqueue a RAG query job, return the job id to poll ---
 indexRouter.post("/query", async (req, res) => {
