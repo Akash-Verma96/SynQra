@@ -10,10 +10,12 @@ import {
   FileText,
   Globe,
   LoaderCircle,
+  LogOut,
   MessageSquareText,
   Plus,
   Search,
   SendHorizonal,
+  ShieldCheck,
   Sparkles,
   UploadCloud,
   Video,
@@ -50,6 +52,108 @@ function StatusBadge({ status }) {
       <Icon className="status-dot" />
       {current.label}
     </span>
+  )
+}
+
+function GoogleMark() {
+  return (
+    <svg viewBox="0 0 48 48" aria-hidden="true" className="google-mark" focusable="false">
+      <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20c10.493 0 19.438-7.444 19.438-20 0-1.341-.137-2.646-.389-3.917Z" opacity="0.99" />
+      <path fill="#FF3D00" d="M6.306 14.691 15.24 19.2A11.91 11.91 0 0 1 24 16c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 15.729 4 8.619 8.936 6.306 14.691Z" />
+      <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.417-5.194l-6.198-5.285C29.126 35.466 26.721 36.4 24 36.4c-5.201 0-9.625-3.335-11.288-7.859L6.46 24.94A19.94 19.94 0 0 0 24 44Z" />
+      <path fill="#1976D2" d="M46.49 24.551c.2-1.067.31-2.17.31-3.551 0-1.381-.11-2.484-.31-3.551H24v8h12.436c-.734 2.026-1.776 3.75-3.063 5.057l6.198 5.285C43.356 34.424 46.49 29.746 46.49 24.551Z" />
+    </svg>
+  )
+}
+
+function AuthLoadingScreen() {
+  return (
+    <div className="auth-screen">
+      <div className="auth-loading-card">
+        <LoaderCircle className="auth-loader" />
+        <span>Checking your secure session…</span>
+      </div>
+    </div>
+  )
+}
+
+function AuthScreen({ onGoogleLogin, isAuthenticating, authError }) {
+  return (
+    <div className="auth-screen">
+      <div className="auth-shell">
+        <div className="auth-copy-panel">
+          <div className="auth-badge">
+            <ShieldCheck className="h-4 w-4" />
+            Secure workspace access
+          </div>
+
+          <h1>Turn scattered files into instant answers.</h1>
+
+          <p className="auth-subtitle">
+            Research, ingest, and query your documents, websites, and media from one elegant workspace built for speed.
+          </p>
+
+          <div className="auth-feature-list">
+            <div className="feature-pill">
+              <CheckCircle2 className="h-4 w-4" />
+              <span>Instant semantic search</span>
+            </div>
+            <div className="feature-pill">
+              <CheckCircle2 className="h-4 w-4" />
+              <span>Multi-source indexing</span>
+            </div>
+            <div className="feature-pill">
+              <CheckCircle2 className="h-4 w-4" />
+              <span>Private team-ready workspace</span>
+            </div>
+          </div>
+
+          <div className="auth-stat-grid">
+            <div className="auth-stat-card">
+              <span className="stat-label">Sources</span>
+              <strong>10x faster</strong>
+              <small>Query across files, URLs, and transcripts</small>
+            </div>
+            <div className="auth-stat-card">
+              <span className="stat-label">Accuracy</span>
+              <strong>Context-aware</strong>
+              <small>Grounded answers from your indexed data</small>
+            </div>
+          </div>
+        </div>
+
+        <div className="auth-panel">
+          <div className="auth-glow" aria-hidden="true" />
+
+          <div className="auth-panel-card">
+            <p className="eyebrow auth-eyebrow">Welcome back</p>
+            <h2>Sign in to SynQra</h2>
+
+            <button type="button" className="google-signin-btn" onClick={onGoogleLogin} disabled={isAuthenticating}>
+              <GoogleMark />
+              {isAuthenticating ? 'Connecting to Google…' : 'Continue with Google'}
+            </button>
+
+            {authError ? <div className="auth-error-banner">{authError}</div> : null}
+
+            <div className="auth-divider">
+              <span>Secure OAuth</span>
+            </div>
+
+            <div className="auth-trust-list">
+              <div>
+                <Sparkles className="h-4 w-4" />
+                <span>Protected by session cookies</span>
+              </div>
+              <div>
+                <ShieldCheck className="h-4 w-4" />
+                <span>Works with your Google account</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -90,6 +194,11 @@ function buildYoutubeEmbedUrl(url) {
 }
 
 function App() {
+  const [user, setUser] = useState(null)
+  const [authState, setAuthState] = useState('checking')
+  const [authReady, setAuthReady] = useState(false)
+  const [isAuthenticating, setIsAuthenticating] = useState(false)
+  const [authError, setAuthError] = useState('')
   const [sources, setSources] = useState([])
   const [selectedSourceId, setSelectedSourceId] = useState(null)
   const [query, setQuery] = useState('')
@@ -109,10 +218,105 @@ function App() {
   const fileInputRef = useRef(null)
   const threadRef = useRef(null)
 
+  const fetchJson = async (endpoint, options = {}) => {
+    const response = await fetch(endpoint, { credentials: 'include', ...options })
+    const contentType = response.headers.get('content-type') || ''
+    const data = contentType.includes('application/json') ? await response.json() : {}
+    return { response, data }
+  }
+
+  const refreshSession = async () => {
+    try {
+      const { response, data } = await fetchJson(`${API_BASE}/me`)
+      if (response.ok && data?.success && data.user) {
+        setUser(data.user)
+        setAuthState('authenticated')
+        return true
+      }
+      setUser(null)
+      setAuthState('unauthenticated')
+      return false
+    } catch (error) {
+      console.error('Auth session check failed:', error)
+      setUser(null)
+      setAuthState('unauthenticated')
+      return false
+    }
+  }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const authStatus = params.get('auth')
+
+    if (authStatus === 'success' || authStatus === 'failed') {
+      window.history.replaceState({}, '', window.location.pathname)
+
+      if (authStatus === 'success') {
+        setAuthError('')
+        setAuthState('checking')
+        setAuthReady(false)
+        refreshSession().finally(() => setAuthReady(true))
+        return
+      }
+
+      setAuthState('unauthenticated')
+      setAuthReady(true)
+      setAuthError('Google sign-in was interrupted. Please try again.')
+      return
+    }
+
+    let isMounted = true
+
+    const loadSession = async () => {
+      await refreshSession()
+      if (isMounted) {
+        setAuthReady(true)
+      }
+    }
+
+    loadSession()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
   const selectedSource = useMemo(
     () => sources.find((source) => source.id === selectedSourceId) ?? sources[0] ?? null,
     [selectedSourceId, sources],
   )
+
+  const getProfileImage = () => {
+    if (user?.avatarUrl) return user.avatarUrl
+    if (user?.picture) return user.picture
+    if (user?.imageUrl) return user.imageUrl
+    if (user?.email) {
+      const initials = (user.name || user.email).trim().charAt(0).toUpperCase() || 'S'
+      return `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email)}&background=3b82f6&color=ffffff&size=128&rounded=true&bold=true&format=png`
+    }
+    return null
+  }
+
+  const handleGoogleLogin = () => {
+    setAuthError('')
+    setIsAuthenticating(true)
+    window.location.assign(`${API_BASE}/google`)
+  }
+
+  const handleLogout = async () => {
+    try {
+      await fetchJson(`${API_BASE}/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+    } catch (error) {
+      console.error('Logout failed:', error)
+    } finally {
+      setUser(null)
+      setAuthState('unauthenticated')
+      window.location.assign(window.location.origin)
+    }
+  }
 
   useEffect(() => {
     if (!selectedSource && sources[0]) {
@@ -157,8 +361,11 @@ function App() {
     if (!jobId) return
 
     try {
-      const response = await fetch(`${API_BASE}/index/${jobId}`)
-      const data = await response.json()
+      const { response, data } = await fetchJson(`${API_BASE}/index/${jobId}`)
+
+      if (!response.ok && data?.error) {
+        throw new Error(data.error)
+      }
 
       if (data.status === 'completed') {
         const storedFile = data.result?.fileUrl || data.result?.storedAs
@@ -199,8 +406,11 @@ function App() {
 
   const pollWebsiteJob = async (jobId, sourceId) => {
     try {
-      const response = await fetch(`${API_BASE}/crawl/${jobId}`)
-      const data = await response.json()
+      const { response, data } = await fetchJson(`${API_BASE}/crawl/${jobId}`)
+
+      if (!response.ok && data?.error) {
+        throw new Error(data.error)
+      }
 
       if (data.status === 'completed') {
         const nestedIndexJobId = data.result?.id || data.result?.jobId || data.result?.job?.id
@@ -245,8 +455,11 @@ function App() {
 
   const pollYoutubeJob = async (jobId, sourceId) => {
     try {
-      const response = await fetch(`${API_BASE}/youtube/${jobId}`)
-      const data = await response.json()
+      const { response, data } = await fetchJson(`${API_BASE}/youtube/${jobId}`)
+
+      if (!response.ok && data?.error) {
+        throw new Error(data.error)
+      }
 
       if (data.status === 'completed') {
         completeSource(sourceId, {
@@ -287,11 +500,10 @@ function App() {
     setShowSourceModal(false)
 
     try {
-      const response = await fetch(`${API_BASE}/index`, {
+      const { response, data } = await fetchJson(`${API_BASE}/index`, {
         method: 'POST',
         body: formData,
       })
-      const data = await response.json()
 
       if (!response.ok) {
         throw new Error(data?.error || 'Upload failed')
@@ -346,12 +558,11 @@ function App() {
       setIsUploading(true)
       setShowSourceModal(false)
       try {
-        const response = await fetch(`${API_BASE}/url`, {
+        const { response, data } = await fetchJson(`${API_BASE}/url`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ websiteUrl: value, sourceName: 'Website source' }),
         })
-        const data = await response.json()
 
         if (!response.ok) throw new Error(data?.error || 'Website source failed')
 
@@ -389,12 +600,11 @@ function App() {
       setIsUploading(true)
       setShowSourceModal(false)
       try {
-        const response = await fetch(`${API_BASE}/url`, {
+        const { response, data } = await fetchJson(`${API_BASE}/url`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ youtubeUrl: value, sourceName: 'YouTube video' }),
         })
-        const data = await response.json()
 
         if (!response.ok) throw new Error(data?.error || 'YouTube source failed')
 
@@ -432,12 +642,11 @@ function App() {
       setIsUploading(true)
       setShowSourceModal(false)
       try {
-        const response = await fetch(`${API_BASE}/url`, {
+        const { response, data } = await fetchJson(`${API_BASE}/url`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: value, sourceName: textName.trim() || 'Text snippet' }),
         })
-        const data = await response.json()
 
         if (!response.ok) throw new Error(data?.error || 'Text upload failed')
 
@@ -499,7 +708,7 @@ function App() {
     setAnswer('')
 
     try {
-      const response = await fetch(`${API_BASE}/query`, {
+      const { response, data } = await fetchJson(`${API_BASE}/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -508,8 +717,6 @@ function App() {
         }),
       })
 
-      const data = await response.json()
-
       if (!response.ok) {
         throw new Error(data?.error || 'Query failed')
       }
@@ -517,8 +724,11 @@ function App() {
       const jobId = data.jobId
 
       const poll = async () => {
-        const pollResponse = await fetch(`${API_BASE}/query/${jobId}`)
-        const pollData = await pollResponse.json()
+        const { response: pollResponse, data: pollData } = await fetchJson(`${API_BASE}/query/${jobId}`)
+
+        if (!pollResponse.ok) {
+          throw new Error(pollData?.error || 'Unable to poll query status')
+        }
 
         if (pollData.status === 'completed') {
           const resultValue = pollData.result
@@ -683,6 +893,14 @@ function App() {
         </p>
       )
     })
+  }
+
+  if (!authReady) {
+    return <AuthLoadingScreen />
+  }
+
+  if (authState !== 'authenticated') {
+    return <AuthScreen onGoogleLogin={handleGoogleLogin} isAuthenticating={isAuthenticating} authError={authError} />
   }
 
   return (
@@ -882,6 +1100,26 @@ function App() {
                   Open viewer
                 </button>
               )}
+
+              <div className="profile-badge-shell">
+                <div className="profile-badge">
+                  {getProfileImage() ? (
+                    <img src={getProfileImage()} alt={user?.name || 'Profile'} className="profile-avatar" />
+                  ) : (
+                    <span>{(user?.name || 'S').charAt(0).toUpperCase()}</span>
+                  )}
+                </div>
+                <div className="profile-copy">
+                  <span className="profile-name">{user?.name || 'SynQra user'}</span>
+                  <span className="profile-email">{user?.email || 'Google account'}</span>
+                </div>
+              </div>
+
+              <button type="button" className="logout-button" onClick={handleLogout}>
+                <LogOut className="h-3.5 w-3.5" />
+                Sign out
+              </button>
+
               <span className={`state-pill ${selectedSource?.status === 'completed' ? 'ready' : ''}`}>
                 {selectedSource?.status === 'completed'
                   ? 'Ready'
