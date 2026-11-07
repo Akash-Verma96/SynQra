@@ -13,4 +13,51 @@ datasource db {
 }
 
 
+model User {
+  id            String        @id @default(uuid()) @db.Uuid
+  name          String?
+  email         String        @unique @db.VarChar(320)
+  emailVerified Boolean       @default(false)
+  avatarUrl     String?       @db.Text
+
+  authAccounts  AuthAccount[]
+  sessions      Session[]
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@map("users")
+}
+
+model AuthAccount {
+  id             String   @id @default(uuid()) @db.Uuid
+
+  userId         String   @db.Uuid
+  provider       String   @db.VarChar(50)
+  providerUserId String   @db.VarChar(255)
+
+  user           User     @relation(fields: [userId],references: [id],onDelete: Cascade)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+  @@map("auth_accounts")
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String   @unique @db.VarChar(255)
+  expiresAt DateTime
+
+  user      User     @relation(fields: [userId],references: [id],onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
 
