@@ -4,9 +4,13 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { serverConfig } from './config/index.js'
 import { setUpCrwalWorker, setUpIndexWorker, setUpQUERYWorker, setUpYtWorker } from './workers/index.worker.js';
-import indexRouter from './index.js';
+import indexRouter from './routers/index.router.js';
+import cookieParser from 'cookie-parser';
 
 const app = express()
+app.use(express.json())
+app.use(cookieParser());
+
 const port = serverConfig.PORT;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -17,7 +21,7 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json())
+
 app.use('/uploads', express.static(uploadsDir));
 app.use('/api/v1', indexRouter);
 

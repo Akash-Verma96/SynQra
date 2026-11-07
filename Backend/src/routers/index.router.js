@@ -4,13 +4,14 @@ import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { addToCrwalQueue, addToIndexQueue, addToQueryQueue, addToYtQueue } from "./producers/index.producer.js";
-import { queryQueue } from "./queues/query.queue.js";
-import { indexQueue } from "./queues/index.queue.js";
-import { crawlQueue } from "./queues/crawler.queue.js";
-import { ytQueue } from "./queues/ytTranscript.queue.js";
+import { addToCrwalQueue, addToIndexQueue, addToQueryQueue, addToYtQueue } from "../producers/index.producer.js";
+import { queryQueue } from "../queues/query.queue.js";
+import { indexQueue } from "../queues/index.queue.js";
+import { crawlQueue } from "../queues/crawler.queue.js";
+import { ytQueue } from "../queues/ytTranscript.queue.js";
 import { Document } from "@langchain/core/documents";
-import { indexDocuments } from "./services/indexer.js";
+import { indexDocuments } from "../services/indexer.js";
+import authRouter from "./auth.router.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadDir = path.join(__dirname, "..", "uploads");
@@ -69,6 +70,10 @@ const fileUpload = multer({
 
 const indexRouter = express.Router()
 indexRouter.use(express.json());
+
+indexRouter.use('/',authRouter);
+
+
 
 indexRouter.get("/health", (_req, res) => res.json({ status: "ok" }));
 
