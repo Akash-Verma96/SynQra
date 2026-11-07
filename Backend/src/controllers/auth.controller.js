@@ -2,6 +2,9 @@ import googleClient from "../config/googleOauth.js";
 import { serverConfig } from "../config/index.js";
 import { generateOAuthState } from "../utils/oauth.utils.js";
 import { findOrCreateGoogleUser } from "../services/auth.service.js";
+import { createSession } from "../services/session.service.js";
+import {SESSION_COOKIE_NAME,sessionCookieOptions,clearSessionCookieOptions} from "../utils/session.utils.js";
+import {revokeSession,} from "../services/session.service.js";
 
 export const googleLogin = (req, res) => {
   const state = generateOAuthState();
@@ -76,15 +79,24 @@ export const googleCallback = async (req, res) => {
 
     const user = await findOrCreateGoogleUser(payload);
 
+    const { sessionToken } = await createSession(user.id);
+
+    // Set authentication cookie
+    res.cookie(
+      SESSION_COOKIE_NAME,
+      sessionToken,
+      sessionCookieOptions
+    );
+
     return res.status(200).json({
-    success: true,
-    message: "User authenticated successfully",
-    user: {
+      success: true,
+      message: "Google authentication successful",
+      user: {
         id: user.id,
         name: user.name,
         email: user.email,
         avatarUrl: user.avatarUrl,
-    },
+      },
     });
 
   } catch (error) {
@@ -93,6 +105,44 @@ export const googleCallback = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Google authentication failed",
+    });
+  }
+};
+
+// Return authenticated user
+export const getMe = async (req, res) => {
+  return res.status(200).json({
+    success: true,
+    user: req.user,
+  });
+};
+
+
+export const logout = async (req, res) => {
+  try {
+    const sessionToken = req.cookies?.[SESSION_COOKIE_NAME];
+
+    if (sessionToken) {
+      await revokeSession(sessionToken);
+    }
+
+    // Clear authentication cookie
+    res.clearCookie(
+      SESSION_COOKIE_NAME,
+      clearSessionCookieOptions
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Logged out successfully",
+    });
+
+  } catch (error) {
+    console.error("Logout error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to complete logout",
     });
   }
 };
