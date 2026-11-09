@@ -12,6 +12,9 @@ import {
   LoaderCircle,
   LogOut,
   MessageSquareText,
+  NotebookText,
+  PanelLeftClose,
+  PanelRightClose,
   Plus,
   Search,
   SendHorizonal,
@@ -19,6 +22,7 @@ import {
   Sparkles,
   UploadCloud,
   Video,
+  Volume2,
   X,
 } from 'lucide-react'
 
@@ -31,10 +35,20 @@ const SOURCE_BASE = 'http://localhost:3001/uploads'
 const SOURCE_OPTIONS = [
   { id: 'pdf', label: 'PDF', icon: FileText, accent: 'violet', description: 'Upload in one click' },
   { id: 'docx', label: 'DOCX', icon: FileText, accent: 'blue', description: 'Word documents' },
-  { id: 'image', label: 'Image', icon: FileImage, accent: 'amber', description: 'PNG / JPG / GIF' },
+  // { id: 'image', label: 'Image', icon: FileImage, accent: 'amber', description: 'PNG / JPG / GIF' },
   { id: 'website', label: 'Website URL', icon: Globe, accent: 'cyan', description: 'Crawl and index pages' },
   { id: 'youtube', label: 'YouTube URL', icon: Video, accent: 'rose', description: 'Transcript and index' },
   { id: 'text', label: 'Text', icon: MessageSquareText, accent: 'emerald', description: 'Paste a note or snippet' },
+]
+
+const INSIGHT_TABS = [
+  { id: 'summary', label: 'Summary', icon: FileText },
+  { id: 'notes', label: 'AI notes', icon: NotebookText },
+  { id: 'audio', label: 'Audio overview', icon: Volume2, disabled: true },
+  { id: 'video', label: 'Video overview', icon: Video, disabled: true },
+  { id: 'mindmap', label: 'Mind map', icon: BookOpenText, disabled: true },
+  { id: 'flashcards', label: 'Flash card', icon: Sparkles, disabled: true },
+  { id: 'quiz', label: 'Quiz', icon: CheckCircle2, disabled: true },
 ]
 
 function StatusBadge({ status }) {
@@ -68,7 +82,7 @@ function GoogleMark() {
 
 function AuthLoadingScreen() {
   return (
-    <div className="auth-screen">
+    <div className="auth-screen auth-screen-loading">
       <div className="auth-loading-card">
         <LoaderCircle className="auth-loader" />
         <span>Checking your secure session…</span>
@@ -79,7 +93,7 @@ function AuthLoadingScreen() {
 
 function AuthScreen({ onGoogleLogin, isAuthenticating, authError }) {
   return (
-    <div className="auth-screen">
+    <div className="auth-screen auth-screen-enter">
       <div className="auth-shell">
         <div className="auth-copy-panel">
           <div className="auth-badge">
@@ -215,6 +229,8 @@ function App() {
   const [textSnippet, setTextSnippet] = useState('')
   const [textName, setTextName] = useState('')
   const [showViewer, setShowViewer] = useState(true)
+  const [showSidebar, setShowSidebar] = useState(true)
+  const [activeInsightTab, setActiveInsightTab] = useState('summary')
   const fileInputRef = useRef(null)
   const threadRef = useRef(null)
 
@@ -280,6 +296,14 @@ function App() {
       isMounted = false
     }
   }, [])
+
+  const toggleViewer = () => {
+    setShowViewer((value) => !value)
+  }
+
+  const toggleSidebar = () => {
+    setShowSidebar((value) => !value)
+  }
 
   const selectedSource = useMemo(
     () => sources.find((source) => source.id === selectedSourceId) ?? sources[0] ?? null,
@@ -895,6 +919,93 @@ function App() {
     })
   }
 
+  const summaryCards = [
+    { label: 'Source', value: selectedSource?.sourceType || 'Ready' },
+    { label: 'Status', value: selectedSource?.updatedAt || 'Ready' },
+    { label: 'Focus', value: selectedSource?.preview || 'No active source selected' },
+  ]
+
+  const insightContent = {
+    summary: (
+      <div className="insight-stack">
+        <div className="info-grid compact-grid">
+          {summaryCards.map((card) => (
+            <div className="mini-info-card" key={card.label}>
+              <span>{card.label}</span>
+              <strong>{card.value}</strong>
+            </div>
+          ))}
+        </div>
+        <div className="insight-card">
+          <div className="insight-card-header">
+            <FileText className="h-4 w-4" />
+            <span>Key takeaways</span>
+          </div>
+          <ul className="bullet-list">
+            <li>Core context is grounded to the selected source.</li>
+            <li>Ask targeted questions to surface key decisions and details.</li>
+            <li>Use the source list to switch between multiple research materials.</li>
+          </ul>
+        </div>
+      </div>
+    ),
+    notes: (
+      <div className="insight-stack">
+        <div className="insight-card">
+          <div className="insight-card-header">
+            <NotebookText className="h-4 w-4" />
+            <span>AI notes</span>
+          </div>
+          <div className="note-list">
+            <div className="note-item">
+              <strong>Theme</strong>
+              <p>Identifies the most relevant ideas and supporting evidence from the active source.</p>
+            </div>
+            <div className="note-item">
+              <strong>Action</strong>
+              <p>Turn the summary into quick follow-ups, decisions, and implementation next steps.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    ),
+    audio: (
+      <div className="coming-soon-state">
+        <Volume2 className="h-5 w-5" />
+        <strong>Audio overview</strong>
+        <span>Coming soon</span>
+      </div>
+    ),
+    video: (
+      <div className="coming-soon-state">
+        <Video className="h-5 w-5" />
+        <strong>Video overview</strong>
+        <span>Coming soon</span>
+      </div>
+    ),
+    mindmap: (
+      <div className="coming-soon-state">
+        <BookOpenText className="h-5 w-5" />
+        <strong>Mind map</strong>
+        <span>Coming soon</span>
+      </div>
+    ),
+    flashcards: (
+      <div className="coming-soon-state">
+        <Sparkles className="h-5 w-5" />
+        <strong>Flash cards</strong>
+        <span>Coming soon</span>
+      </div>
+    ),
+    quiz: (
+      <div className="coming-soon-state">
+        <CheckCircle2 className="h-5 w-5" />
+        <strong>Quiz</strong>
+        <span>Coming soon</span>
+      </div>
+    ),
+  }
+
   if (!authReady) {
     return <AuthLoadingScreen />
   }
@@ -1028,17 +1139,22 @@ function App() {
       )}
 
       <div className={`notebook-layout ${showViewer ? 'with-viewer' : 'without-viewer'}`}>
-        <aside className="sidebar-panel">
+        <aside className={`sidebar-panel ${showSidebar ? '' : 'collapsed'}`}>
           <div className="sidebar-header">
             <div className="brand-box">
               <BookOpenText className="h-5 w-5" />
             </div>
             <div className="brand-copy">
               <p className="eyebrow">Workspace</p>
-              <h1>SourceQ</h1>
+              <h1>SynQra</h1>
             </div>
-            <button type="button" className="ghost-icon" aria-label="Add new source" onClick={() => setShowSourceModal(true)}>
-              <Plus className="h-4 w-4" />
+            <button
+              type="button"
+              className="ghost-icon"
+              aria-label={showSidebar ? 'Hide source list' : 'Open source list'}
+              onClick={toggleSidebar}
+            >
+              {showSidebar ? <PanelRightClose className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
             </button>
           </div>
 
@@ -1068,7 +1184,7 @@ function App() {
                   key={source.id}
                   type="button"
                   onClick={() => setSelectedSourceId(source.id)}
-                  className={`source-item ${selectedSourceId === source.id ? 'selected' : ''}`}
+                  className={`source-item ${selectedSourceId === source.id ? 'selected' : ''}`} 
                 >
                   <div className={`source-preview-icon ${source.accent || 'violet'}`}>
                     {source.sourceType === 'website' ? <Globe className="h-4 w-4" /> : source.sourceType === 'youtube' ? <Video className="h-4 w-4" /> : source.sourceType === 'text' ? <MessageSquareText className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
@@ -1094,13 +1210,6 @@ function App() {
               </div>
             </div>
             <div className="topbar-right">
-              {!showViewer && (
-                <button type="button" className="viewer-toggle" onClick={() => setShowViewer(true)}>
-                  <Search className="h-3.5 w-3.5" />
-                  Open viewer
-                </button>
-              )}
-
               <div className="profile-badge-shell">
                 <div className="profile-badge">
                   {getProfileImage() ? (
@@ -1241,81 +1350,48 @@ function App() {
           </div>
         </main>
 
-        {showViewer && (
-          <aside className="viewer-panel">
-            <div className="viewer-header">
-              <div>
-                <p className="eyebrow">Document viewer</p>
-                <h2>{selectedSource?.name || 'No source selected'}</h2>
-              </div>
-              <div className="viewer-header-actions">
-                {selectedSource && <StatusBadge status={selectedSource.status} />}
-                <button type="button" className="panel-close-button" aria-label="Close viewer" onClick={() => setShowViewer(false)}>
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+        <aside className={`viewer-panel ${showViewer ? '' : 'collapsed'}`}>
+          <div className="viewer-header">
+            <div className="viewer-header-copy">
+              <p className="eyebrow">Sources</p>
+              {showViewer && <h2>{selectedSource?.name || 'No source selected'}</h2>}
             </div>
+            <div className="viewer-header-actions">
+              {showViewer && selectedSource && <StatusBadge status={selectedSource.status} />}
+              <button
+                type="button"
+                className="ghost-icon panel-close-button"
+                aria-label={showViewer ? 'Hide source insights' : 'Open source insights'}
+                onClick={toggleViewer}
+              >
+                {showViewer ? <PanelRightClose className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
 
-            {selectedSource ? (
-              <div className="viewer-embed-wrap">
-                {selectedSource.sourceType === 'website' && selectedSource.url ? (
-                  <iframe title={selectedSource.name} src={selectedSource.url} className="viewer-iframe" allow="fullscreen" />
-                ) : selectedSource.sourceType === 'youtube' && selectedSource.url ? (
-                  <div className="youtube-player-shell">
-                    <iframe
-                      title={selectedSource.name}
-                      src={buildYoutubeEmbedUrl(selectedSource.url)}
-                      className="viewer-iframe youtube-iframe"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  </div>
-                ) : selectedSource.sourceType === 'text' ? (
-                  <div className="viewer-text-plain">
-                    <pre>{selectedSource.textPreview || 'No text preview available yet.'}</pre>
-                  </div>
-                ) : selectedSource.fileKind === 'image' && selectedSource.fileUrl ? (
-                  <img src={selectedSource.fileUrl} alt={selectedSource.name} className="viewer-image" />
-                ) : selectedSource.fileKind === 'pdf' && selectedSource.fileUrl ? (
-                  <iframe title={selectedSource.name} src={selectedSource.fileUrl} className="viewer-iframe" allow="fullscreen" />
-                ) : selectedSource.fileKind === 'docx' ? (
-                  <div className="viewer-file-placeholder">
-                    <FileText className="h-8 w-8" />
-                    <h3>DOCX preview not available in-browser</h3>
-                    <p>The document is indexed and ready to query.</p>
-                  </div>
-                ) : (
-                  <div className="viewer-file-placeholder">
-                    <Search className="h-8 w-8" />
-                    <h3>Content ready</h3>
-                    <p>This source has been indexed and is ready for semantic queries.</p>
-                  </div>
-                )}
+          {showViewer && (
+            <>
+              <div className="viewer-tab-list">
+                {INSIGHT_TABS.map(({ id, label, icon: Icon, disabled }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={`viewer-tab-button ${activeInsightTab === id ? 'active' : ''}`}
+                    onClick={() => !disabled && setActiveInsightTab(id)}
+                    disabled={disabled}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    <span>{label}</span>
+                  </button>
+                ))}
               </div>
-            ) : (
-              <div className="viewer-empty-state">
-                <div className="empty-viewer-icon">
-                  <Search className="h-6 w-6" />
-                </div>
-                <h3>Select a source</h3>
-                <p>Choose a source from the left to open the original content here.</p>
-              </div>
-            )}
 
-            {selectedSource && (
-              <div className="viewer-meta">
-                <div className="meta-row">
-                  <span className="meta-label">Status</span>
-                  <span className="meta-value">{selectedSource.updatedAt}</span>
-                </div>
-                <div className="meta-row">
-                  <span className="meta-label">Summary</span>
-                  <span className="meta-value">{selectedSource.preview}</span>
-                </div>
+              <div className="viewer-body">
+                {insightContent[activeInsightTab] || insightContent.summary}
               </div>
-            )}
-          </aside>
-        )}
+            </>
+          )}
+        </aside>
       </div>
     </div>
   )
