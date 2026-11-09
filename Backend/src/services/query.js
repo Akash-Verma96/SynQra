@@ -4,7 +4,7 @@ import { QdrantVectorStore } from '@langchain/qdrant';
 import { serverConfig } from "../config/index.js";
 import { rankDocumentsRRF } from "./ranker.js";
 
-export async function queryFromSource(query, conversationHistory = []) {
+export async function queryFromSource(userId,query, conversationHistory = []) {
     // 1. Generate query variations
     const { stepBack, rewritten, subQueries } = await rewriteQuery(query);
     const hyde = await hydeDocument(query);
@@ -30,8 +30,19 @@ export async function queryFromSource(query, conversationHistory = []) {
         }
     );
 
-    const retriever = vectorStore.asRetriever({ k: 2 });
-
+    const retriever = vectorStore.asRetriever({
+    k: 5,
+    filter: {
+        must: [
+        {
+            key: "metadata.user_id",
+            match: {
+            value: userId,
+            },
+        },
+        ],
+    },
+    });
     // 4. Run retrievals for ALL queries concurrently
     const retrievalPromises = allQueries.map(async (q) => {
         const docs = await retriever.invoke(q.text);

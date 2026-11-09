@@ -12,6 +12,7 @@ import { ytQueue } from "../queues/ytTranscript.queue.js";
 import { Document } from "@langchain/core/documents";
 import { indexDocuments } from "../services/indexer.js";
 import authRouter from "./auth.router.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadDir = path.join(__dirname, "..", "uploads");
@@ -103,7 +104,7 @@ indexRouter.get("/index/:id", async (req, res) => {
 });
 
 // --- POST /index : upload one or more source files and enqueue indexing jobs ---
-indexRouter.post("/index", fileUpload.array("files", 10), async (req, res) => {
+indexRouter.post("/index",requireAuth, fileUpload.array("files", 10), async (req, res) => {
   if (!req.files || req.files.length === 0) {
     return res.status(400).json({ error: "No files uploaded (field: 'files')" });
   }
@@ -112,6 +113,7 @@ indexRouter.post("/index", fileUpload.array("files", 10), async (req, res) => {
     const jobs = await Promise.all(
       req.files.map(async (file) => {
         const job = await addToIndexQueue({
+          userId: req.user.id,
           filePath: file.path,
           originalName: file.originalname,
           mimeType: file.mimetype,
@@ -141,13 +143,14 @@ indexRouter.post("/index", fileUpload.array("files", 10), async (req, res) => {
 });
 
 // Legacy single-file fallback for compatibility with older clients.
-indexRouter.post("/index/single", upload.single("file"), async (req, res) => {
+indexRouter.post("/index/single",requireAuth, upload.single("file"), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded (field: 'file')" });
   }
 
   try {
     const job = await addToIndexQueue({
+      userId: req.user.id,
       filePath: req.file.path,
       originalName: req.file.originalname,
       mimeType: req.file.mimetype,
@@ -216,12 +219,13 @@ indexRouter.get("/youtube/:id", async (req, res) => {
   }
 });
 
-indexRouter.post('/url', async (req, res) => {
+indexRouter.post('/url',requireAuth, async (req, res) => {
   const { websiteUrl, youtubeUrl, text, sourceName } = req.body;
 
   try {
     if (websiteUrl) {
       const job = await addToCrwalQueue({
+        userId: req.user.id,
         url: websiteUrl,
         sourceName: sourceName || websiteUrl,
       });
@@ -236,6 +240,7 @@ indexRouter.post('/url', async (req, res) => {
 
     if (youtubeUrl) {
       const job = await addToYtQueue({
+        userId: req.user.id,
         url: youtubeUrl,
         sourceName: sourceName || youtubeUrl,
       });
@@ -259,8 +264,9 @@ indexRouter.post('/url', async (req, res) => {
           },
         }),
       ];
+      console.log(req.user.id)
 
-      const result = await indexDocuments(documents, { metadata: { source: 'user', type: 'text' } });
+      const result = await indexDocuments(documents, { userId: req.user.id, metadata: { source: 'user', type: 'text' } });
 
       return res.json({ message: 'Content processed successfully', data: result, sourceType: 'text' });
     }
@@ -272,7 +278,7 @@ indexRouter.post('/url', async (req, res) => {
 });
 
 // --- POST /query : enqueue a RAG query job, return the job id to poll ---
-indexRouter.post("/query", async (req, res) => {
+indexRouter.post("/query",requireAuth, async (req, res) => {
   const query = req.body?.query;
   const conversationHistory = Array.isArray(req.body?.conversationHistory)
     ? req.body.conversationHistory
@@ -286,6 +292,7 @@ indexRouter.post("/query", async (req, res) => {
 
   try {
     const job = await addToQueryQueue({
+      userId: req.user.id,
       query: query.trim(),
       conversationHistory,
     });

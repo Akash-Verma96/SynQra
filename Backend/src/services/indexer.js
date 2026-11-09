@@ -1,4 +1,3 @@
-
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { HuggingFaceTransformersEmbeddings } from
   "@langchain/community/embeddings/huggingface_transformers";
@@ -46,18 +45,24 @@ const splitter = new RecursiveCharacterTextSplitter({
 });
 
 /**
- * Universal LangChain Document Indexer
+ * Universal LangChain Document Indexer segregated by User ID
  *
  * @param {Document[]} documents
  * @param {Object} options
+ * @param {string} options.userId - The unique identifier of the user/tenant
  */
 export async function indexDocuments(
   documents,
   {
+    userId, // 1. Destructure userId explicitly to ensure it is provided
     batchSize = BATCH_SIZE,
     metadata = {},
   } = {}
 ) {
+  if (!userId) {
+    throw new Error("A valid 'userId' is required to index documents securely.");
+  }
+
   if (!Array.isArray(documents) || documents.length === 0) {
     throw new Error("Documents must be a non-empty array.");
   }
@@ -72,12 +77,13 @@ export async function indexDocuments(
   for (const doc of documents) {
     if (!doc?.pageContent?.trim()) continue;
 
-    // Preserve original metadata and add common metadata.
+    // Preserve original metadata and bind the userId to the payload
     const normalizedDoc = {
       ...doc,
       metadata: {
         ...doc.metadata,
         ...metadata,
+        user_id: userId, // 2. Map userId strictly to a consistent field like 'user_id'
       },
     };
 
@@ -95,7 +101,7 @@ export async function indexDocuments(
         totalIndexed += batch.length;
         batch = [];
 
-        console.log(`Indexed ${totalIndexed} chunks`);
+        console.log(`Indexed ${totalIndexed} chunks for user: ${userId}`);
       }
     }
   }

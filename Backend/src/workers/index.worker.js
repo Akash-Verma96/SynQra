@@ -22,8 +22,9 @@ export function setUpIndexWorker(){
         console.log(`🔄 Processing Indexing name: ${job.data.originalName}`);
         
         const documents = await loadSource(job.data.filePath)
-
+       
         const result = await indexDocuments(documents,{
+            userId: job.data.userId,
             metadata: documents.metadata
         })
 
@@ -47,7 +48,7 @@ export function setUpQUERYWorker(){
 
         console.log(`🔄 Processing Query : ${job.data.query}`);
 
-        const result = await queryFromSource(job.data.query, job.data.conversationHistory || []);
+        const result = await queryFromSource(job.data.userId,job.data.query, job.data.conversationHistory || []);
         console.log(result);
         return result;
     },{
@@ -74,12 +75,11 @@ export function setUpCrwalWorker(){
                 maxDiscoveryDepth: 3,
             }
         );
-        // const result = await queryFromSource(job.data.query);
-        console.log(website);
-        
+       
         console.log(`🔄 Processing Indexing name: ${website.fileName}`);
 
         const indexingJob = await addToIndexQueue({
+            userId: job.data.userId,
             filePath: website.filePath,
             originalName: website.fileName,
             mimeType: website.mimetype,
@@ -120,6 +120,7 @@ export function setUpYtWorker(){
 
         
         const result = await indexDocuments(documents,{
+            userId: job.data.userId,
             metadata: documents.metadata
         })
 

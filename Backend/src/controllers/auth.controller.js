@@ -26,6 +26,7 @@ export const googleLogin = (req, res) => {
   return res.redirect(authorizationUrl);
 };
 
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
 export const googleCallback = async (req, res) => {
   try {
@@ -88,24 +89,11 @@ export const googleCallback = async (req, res) => {
       sessionCookieOptions
     );
 
-    return res.status(200).json({
-      success: true,
-      message: "Google authentication successful",
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        avatarUrl: user.avatarUrl,
-      },
-    });
-
+    return res.redirect(`${FRONTEND_URL}/?auth=success`);
   } catch (error) {
     console.error("Google OAuth callback error:", error);
 
-    return res.status(500).json({
-      success: false,
-      message: "Google authentication failed",
-    });
+    return res.redirect(`${FRONTEND_URL}/?auth=failed`);
   }
 };
 

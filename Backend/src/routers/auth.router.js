@@ -11,7 +11,7 @@ authRouter.get("/protected", requireAuth, (req, res) => {
   return res.status(200).json({
     success: true,
     message: "Authenticated successfully",
-    user: req.user,
+    userId: req.user.id,
   });
 });
 
