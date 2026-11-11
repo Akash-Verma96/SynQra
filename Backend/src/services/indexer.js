@@ -1,43 +1,9 @@
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import { HuggingFaceTransformersEmbeddings } from
-  "@langchain/community/embeddings/huggingface_transformers";
-import { QdrantVectorStore } from "@langchain/qdrant";
-
-import { serverConfig } from "../config/index.js";
+import { getVectorStore } from "../config/qdrant.config.js";
 
 const BATCH_SIZE = 32;
 const CHUNK_SIZE = 1000;
 const CHUNK_OVERLAP = 150;
-
-let embeddingsInstance = null;
-let vectorStoreInstance = null;
-
-// Reuse embeddings model instead of loading it for every request.
-function getEmbeddings() {
-  if (!embeddingsInstance) {
-    embeddingsInstance = new HuggingFaceTransformersEmbeddings({
-      modelName: "Xenova/all-MiniLM-L6-v2",
-      batchSize: BATCH_SIZE,
-    });
-  }
-
-  return embeddingsInstance;
-}
-
-// Reuse Qdrant connection and embedding instance.
-async function getVectorStore() {
-  if (!vectorStoreInstance) {
-    vectorStoreInstance = await QdrantVectorStore.fromExistingCollection(
-      getEmbeddings(),
-      {
-        url: serverConfig.qdrant.url,
-        collectionName: serverConfig.qdrant.collection,
-      }
-    );
-  }
-
-  return vectorStoreInstance;
-}
 
 const splitter = new RecursiveCharacterTextSplitter({
   chunkSize: CHUNK_SIZE,

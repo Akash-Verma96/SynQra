@@ -1,10 +1,9 @@
 import { getFinalResponse, hydeDocument, rewriteQuery } from "./rag.js";
-import { HuggingFaceTransformersEmbeddings } from "@langchain/community/embeddings/huggingface_transformers";
-import { QdrantVectorStore } from '@langchain/qdrant';
-import { serverConfig } from "../config/index.js";
 import { rankDocumentsRRF } from "./ranker.js";
+import { getVectorStore } from "../config/qdrant.config.js";
 
 export async function queryFromSource(userId,query, conversationHistory = []) {
+
     // 1. Generate query variations
     const { stepBack, rewritten, subQueries } = await rewriteQuery(query);
     const hyde = await hydeDocument(query);
@@ -18,43 +17,39 @@ export async function queryFromSource(userId,query, conversationHistory = []) {
         ...subQueries.map((q, i) => ({ label: `subQuery${i + 1}`, text: q })),
     ].filter((q) => typeof q.text === "string" && q.text.trim().length > 0);
 
-    // 3. Initialize embeddings and connect to Qdrant
-    const embeddings = new HuggingFaceTransformersEmbeddings({
-        modelName: "Xenova/all-MiniLM-L6-v2",
-    });
-
-    const vectorStore = await QdrantVectorStore.fromExistingCollection(
-        embeddings, {
-            url: serverConfig.qdrant.url,
-            collectionName: serverConfig.qdrant.collection,
-        }
-    );
+ 
+    const vectorStore = await getVectorStore();
 
     const retriever = vectorStore.asRetriever({
-    k: 5,
-    filter: {
-        must: [
-        {
-            key: "metadata.user_id",
-            match: {
-            value: userId,
-            },
-        },
-        ],
-    },
+        k: 5,
+        filter: {
+            must: [
+                {
+                    key: "metadata.user_id",
+                    match: {
+                        value: userId
+                    }
+                }
+            ]
+        }
     });
-    // 4. Run retrievals for ALL queries concurrently
-    const retrievalPromises = allQueries.map(async (q) => {
-        const docs = await retriever.invoke(q.text);
-        // Optional: Attach the label to know which query found which document
-        return docs.map(doc => ({ ...doc, matchedQuery: q.label }));
-    });
+    const retrievalPromises = allQueries.map(async (q, index) => {
+    const docs = await retriever.invoke(q.text);
 
-    // 5. Wait for all searches to finish and flatten the array
-    const nestedResults = await Promise.all(retrievalPromises);
-  
+    return docs.map(doc => ({
+        ...doc,
+        matchedQuery: q.label
+    }));
+});
+
+
+const nestedResults = await Promise.all(retrievalPromises);
+
+
+console.log("Retrieved:", nestedResults.length);
+
     const rankedDocs = rankDocumentsRRF(nestedResults,3)
-
+    
     console.log(`Retrieved ${rankedDocs.length} top ranked documents`);
 
     // Map the ranked docs to extract only the pageContent and join them with a separator

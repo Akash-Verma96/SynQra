@@ -9,7 +9,8 @@ export const serverConfig = {
     GROQ_API_KEY: process.env.GROQ_API_KEY || "",
     DATABASE_URL: process.env.DATABASE_URL || "",
     qdrant: {
-        url: process.env.QDRANT_URL || "http://127.0.0.1:6333",
+        url: process.env.QDRANT_CLUSTER_END_POINT || "http://127.0.0.1:6333",
+        apiKey: process.env.QDRANT_API_KEY || "",
         collection: process.env.QDRANT_COLLECTION || "documents",
     },
     openai: {

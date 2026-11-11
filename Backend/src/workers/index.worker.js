@@ -61,7 +61,7 @@ export function setUpQUERYWorker(){
         console.log(`🔄 Processing Query : ${job.data.query}`);
 
         const result = await queryFromSource(job.data.userId,job.data.query, job.data.conversationHistory || []);
-        console.log(result);
+        // console.log(result);
         return result;
     },{
         connection: getRedisClient()
