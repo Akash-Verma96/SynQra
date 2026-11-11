@@ -4,6 +4,7 @@ import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { v2 as cloudinary } from "cloudinary";
 import { addToCrwalQueue, addToIndexQueue, addToQueryQueue, addToYtQueue } from "../producers/index.producer.js";
 import { queryQueue } from "../queues/query.queue.js";
 import { indexQueue } from "../queues/index.queue.js";
@@ -14,43 +15,79 @@ import { indexDocuments } from "../services/indexer.js";
 import authRouter from "./auth.router.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const uploadDir = path.join(__dirname, "..", "uploads");
+const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+const apiKey = process.env.CLOUDINARY_API_KEY;
+const apiSecret = process.env.CLOUDINARY_API_SECRET;
 
-// Ensure the uploads directory exists.
-fs.mkdirSync(uploadDir, { recursive: true });
-
-// --- Multer config: store PDFs on disk with a unique name ---
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const unique = `${Date.now()}-${crypto.randomUUID()}`;
-    cb(null, `${unique}${path.extname(file.originalname)}`);
-  },
+cloudinary.config({
+  cloud_name: cloudName,
+  api_key: apiKey,
+  api_secret: apiSecret,
 });
 
-const upload = multer({
-  storage,
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB
-  fileFilter: (_req, file, cb) => {
-    // Define the specific document MIME types
-    const allowedDocs = [
-      "application/pdf", 
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" // DOCX
-    ];
+const sanitizeCloudinaryPublicId = (fileName = "") => {
+  const base = path.basename(fileName, path.extname(fileName));
+  return base
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "file";
+};
 
-    // Accept if it's in the allowedDocs array OR if it starts with "image/"
-    if (allowedDocs.includes(file.mimetype) || file.mimetype.startsWith("image/")) {
-      return cb(null, true);
-    }
-    
-    // Reject anything else
-    cb(new Error("Only PDF, DOCX, and image files are allowed"));
-  },
-});
+const getCloudinaryResourceType = (fileName = "", providedType) => {
+  const requested = String(providedType || "").trim().toLowerCase();
+  const ext = path.extname(fileName).toLowerCase();
+
+  if (requested) {
+    if (["image", "raw", "auto"].includes(requested)) return requested;
+    if (requested === "pdf") return "image";
+    if (requested === "document") return "raw";
+  }
+
+  if ([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".avif", ".heic", ".heif"].includes(ext)) {
+    return "image";
+  }
+
+  if ([".pdf"].includes(ext)) {
+    return "image";
+  }
+
+  return "raw";
+};
+
+const getCloudinaryFolder = (userId, fileName = "", resourceType) => {
+  const ext = path.extname(fileName).toLowerCase();
+  const baseFolder = `${userId}`;
+
+  if ([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".avif", ".heic", ".heif"].includes(ext)) {
+    return `synqra/${baseFolder}/images`;
+  }
+
+  if ([".pdf"].includes(ext) || resourceType === "image") {
+    return `synqra/${baseFolder}/pdf`;
+  }
+
+  if ([".docx", ".doc"].includes(ext)) {
+    return `synqra/${baseFolder}/docx`;
+  }
+
+  if ([".xlsx", ".xls", ".csv"].includes(ext)) {
+    return `synqra/${baseFolder}/excel`;
+  }
+
+  if ([".ppt", ".pptx"].includes(ext)) {
+    return `synqra/${baseFolder}/ppt`;
+  }
+
+  if ([".txt", ".md", ".rtf"].includes(ext)) {
+    return `synqra/${baseFolder}/text`;
+  }
+
+  return `synqra/${baseFolder}/raw`;
+};
 
 const fileUpload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowedDocs = [
@@ -69,12 +106,58 @@ const fileUpload = multer({
   },
 });
 
-const indexRouter = express.Router()
+const indexRouter = express.Router();
 indexRouter.use(express.json());
 
-indexRouter.use('/',authRouter);
+indexRouter.use("/", authRouter);
 
+indexRouter.post("/cloudinary/signature", requireAuth, async (req, res) => {
+  try {
+    const fileName = typeof req.body?.fileName === "string" ? req.body.fileName.trim() : "";
+    const requestedResourceType = typeof req.body?.resourceType === "string" ? req.body.resourceType.trim() : "";
 
+    if (!fileName) {
+      return res.status(400).json({ error: "fileName is required" });
+    }
+
+    if (!cloudName || !apiKey || !apiSecret) {
+      return res.status(500).json({ error: "Cloudinary environment variables are not configured" });
+    }
+
+    const resourceType = getCloudinaryResourceType(fileName, requestedResourceType);
+    const folder = getCloudinaryFolder(req.user.id, fileName, resourceType);
+    const publicId = `${crypto.randomUUID()}-${sanitizeCloudinaryPublicId(fileName)}`;
+    const timestamp = Math.round(Date.now() / 1000);
+
+    const paramsToSign = {
+      folder,
+      public_id: publicId,
+      timestamp,
+      type: "upload",
+    };
+
+    const signature = cloudinary.utils.api_sign_request(
+      paramsToSign,
+      apiSecret
+    );
+
+    return res.status(200).json({
+      success: true,
+      cloudName,
+      apiKey,
+      uploadUrl: `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`,
+      timestamp,
+      signature,
+      folder,
+      public_id: publicId,
+      type: "upload",
+      fileName,
+    });
+  } catch (error) {
+    console.error("Cloudinary signature generation failed:", error);
+    return res.status(500).json({ error: "Failed to generate Cloudinary upload signature" });
+  }
+});
 
 indexRouter.get("/health", (_req, res) => res.json({ status: "ok" }));
 
@@ -143,34 +226,34 @@ indexRouter.post("/index",requireAuth, fileUpload.array("files", 10), async (req
 });
 
 // Legacy single-file fallback for compatibility with older clients.
-indexRouter.post("/index/single",requireAuth, upload.single("file"), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "No file uploaded (field: 'file')" });
-  }
+// indexRouter.post("/index/single",requireAuth, upload.single("file"), async (req, res) => {
+//   if (!req.file) {
+//     return res.status(400).json({ error: "No file uploaded (field: 'file')" });
+//   }
 
-  try {
-    const job = await addToIndexQueue({
-      userId: req.user.id,
-      filePath: req.file.path,
-      originalName: req.file.originalname,
-      mimeType: req.file.mimetype,
-      size: req.file.size,
-    });
+//   try {
+//     const job = await addToIndexQueue({
+//       userId: req.user.id,
+//       filePath: req.file.path,
+//       originalName: req.file.originalname,
+//       mimeType: req.file.mimetype,
+//       size: req.file.size,
+//     });
 
-    return res.status(202).json({
-      message: "File uploaded and queued for indexing",
-      jobId: job.id,
-      file: {
-        originalName: req.file.originalname,
-        storedAs: req.file.filename,
-        size: req.file.size,
-      },
-    });
-  } catch (err) {
-    console.error("Failed to enqueue indexing job:", err);
-    return res.status(500).json({ error: "Failed to queue file for indexing" });
-  }
-});
+//     return res.status(202).json({
+//       message: "File uploaded and queued for indexing",
+//       jobId: job.id,
+//       file: {
+//         originalName: req.file.originalname,
+//         storedAs: req.file.filename,
+//         size: req.file.size,
+//       },
+//     });
+//   } catch (err) {
+//     console.error("Failed to enqueue indexing job:", err);
+//     return res.status(500).json({ error: "Failed to queue file for indexing" });
+//   }
+// });
 
 // --- GET /crawl/:id : poll for the status/result of a crawl job ---
 indexRouter.get("/crawl/:id", async (req, res) => {
@@ -333,14 +416,66 @@ indexRouter.get("/query/:id", async (req, res) => {
     return res.json({ jobId: job.id, status: state });
   } catch (err) {
     console.error("Failed to fetch query job:", err);
-    return res.status(500).json({ error: "Failed to fetch job" });
+    return res.status(500).json({ error: "Failed to fetch query job" });
+  } });
+
+// --- POST /index/cloudinary : enqueue an indexing job for a Cloudinary asset ---
+indexRouter.post("/index/cloudinary", requireAuth, async (req, res) => {
+  try {
+    const cloudinaryUrl = typeof req.body?.cloudinaryUrl === "string" ? req.body.cloudinaryUrl.trim() : "";
+    const publicId = typeof req.body?.publicId === "string" ? req.body.publicId.trim() : "";
+    const originalName = typeof req.body?.originalName === "string" ? req.body.originalName.trim() : "";
+    const mimeType = typeof req.body?.mimeType === "string" ? req.body.mimeType.trim() : "application/octet-stream";
+    const size = Number(req.body?.size ?? 0);
+    const resourceType = typeof req.body?.resourceType === "string" ? req.body.resourceType.trim() : "";
+    const folder = typeof req.body?.folder === "string" ? req.body.folder.trim() : "";
+
+    if (!cloudinaryUrl || !publicId || !originalName) {
+      return res.status(400).json({ error: "cloudinaryUrl, publicId, and originalName are required" });
+    }
+
+    try {
+      const parsedUrl = new URL(cloudinaryUrl);
+      if (!parsedUrl.hostname.includes("cloudinary.com") && !parsedUrl.hostname.includes("res.cloudinary.com")) {
+        return res.status(400).json({ error: "cloudinaryUrl must be a valid Cloudinary URL" });
+      }
+    } catch {
+      return res.status(400).json({ error: "cloudinaryUrl must be a valid URL" });
+    }
+
+    const normalizedResourceType = getCloudinaryResourceType(originalName, resourceType || mimeType);
+    const normalizedFolder = folder || getCloudinaryFolder(req.user.id, originalName, normalizedResourceType);
+
+    const job = await addToIndexQueue({
+      userId: req.user.id,
+      filePath: cloudinaryUrl,
+      cloudinaryUrl,
+      publicId,
+      originalName,
+      mimeType,
+      size,
+      resourceType: normalizedResourceType,
+      folder: normalizedFolder,
+      sourceType: "cloudinary",
+    });
+
+    return res.status(202).json({
+      message: "Cloudinary source queued for indexing",
+      jobId: job.id,
+      file: {
+        originalName,
+        secureUrl: cloudinaryUrl,
+        publicId,
+        mimeType,
+        size,
+        resourceType: normalizedResourceType,
+        folder: normalizedFolder,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to queue Cloudinary source for indexing:", error);
+    return res.status(500).json({ error: "Failed to queue Cloudinary asset for indexing" });
   }
 });
 
-// Multer / route error handler.
-indexRouter.use((err, _req, res, _next) => {
-  console.error(err);
-  return res.status(400).json({ error: err.message });
-});
-
-export default indexRouter
+export default indexRouter;

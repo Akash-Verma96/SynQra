@@ -10,6 +10,7 @@ import { CRAWLER_QUEUE } from "../queues/crawler.queue.js";
 import { crawlWebsite } from "../utils/crawlWebsite.js";
 import { YT_QUEUE } from "../queues/ytTranscript.queue.js";
 import { getYoutubeTranscript } from "../utils/youtubeTranscript.js";
+import { loadCloudinarySource } from "../utils/loadCloudinarySourcs.js";
 import { Document } from "@langchain/core/documents";
 
 export function setUpIndexWorker(){
@@ -19,14 +20,25 @@ export function setUpIndexWorker(){
             throw new Error(`Invalid job name: ${job.name}`);
         }
 
-        console.log(`🔄 Processing Indexing name: ${job.data.originalName}`);
-        
-        const documents = await loadSource(job.data.filePath)
-       
+        const sourceType = job.data.sourceType || "local";
+        console.log(`🔄 Processing Indexing name: ${job.data.originalName} (${sourceType})`);
+
+        let documents;
+
+        if (sourceType === "cloudinary") {
+            if (!job.data.cloudinaryUrl) {
+                throw new Error("Cloudinary source is missing a secure URL");
+            }
+
+            documents = await loadCloudinarySource(job.data.cloudinaryUrl, job.data.originalName);
+        } else {
+            documents = await loadSource(job.data.filePath);
+        }
+
         const result = await indexDocuments(documents,{
             userId: job.data.userId,
             metadata: documents.metadata
-        })
+        });
 
         console.log(result);
 
