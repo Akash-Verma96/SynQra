@@ -234,6 +234,10 @@ function App() {
   const fileInputRef = useRef(null)
   const threadRef = useRef(null)
 
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadingFileName, setUploadingFileName] = useState('')
+  const [uploadError, setUploadError] = useState('')
+
   const fetchJson = async (endpoint, options = {}) => {
     const response = await fetch(endpoint, { credentials: 'include', ...options })
     const contentType = response.headers.get('content-type') || ''
@@ -514,55 +518,162 @@ function App() {
     }
   }
 
+  const getCloudinaryUploadType = (fileName = '', mimeType = '') => {
+    const name = String(fileName || '').toLowerCase()
+    const type = String(mimeType || '').toLowerCase()
+
+    if (type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg|avif|heic|heif)$/i.test(name)) return 'image'
+    if (type.includes('pdf') || /\.pdf$/i.test(name)) return 'image'
+    if (/\.(docx?|pptx?|xlsx?|csv|txt|md|rtf)$/i.test(name)) return 'raw'
+    return 'raw'
+  }
+
+  const uploadFileToCloudinary = async (file) => {
+    const { response, data } = await fetchJson(`${API_BASE}/cloudinary/signature`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileName: file.name,
+        resourceType: getCloudinaryUploadType(file.name, file.type),
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(data?.error || 'Cloudinary signature request failed')
+    }
+
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('api_key', data.apiKey)
+    formData.append('timestamp', String(data.timestamp))
+    formData.append('signature', data.signature)
+    formData.append('folder', data.folder)
+    formData.append('public_id', data.public_id)
+    formData.append('type', data.type)
+
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', data.uploadUrl)
+
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return
+        const progress = Math.round((event.loaded / event.total) * 100)
+        setUploadProgress(progress)
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const payload = JSON.parse(xhr.responseText)
+            resolve({
+              secure_url: payload.secure_url,
+              public_id: payload.public_id,
+              originalName: file.name,
+              mimeType: file.type || 'application/octet-stream',
+              size: file.size,
+              resource_type: payload.resource_type || data.resource_type,
+              format: payload.format,
+            })
+          } catch (error) {
+            reject(new Error('Invalid Cloudinary response'))
+          }
+          return
+        }
+
+        let message = 'Cloudinary upload failed'
+        try {
+          const payload = JSON.parse(xhr.responseText)
+          if (payload?.error?.message) message = payload.error.message
+        } catch {
+          // ignore invalid JSON errors
+        }
+        reject(new Error(message))
+      }
+
+      xhr.onerror = () => {
+        reject(new Error('Network error while uploading to Cloudinary'))
+      }
+
+      xhr.send(formData)
+    })
+  }
+
   const uploadFiles = async (files) => {
     if (!files.length) return
 
-    const formData = new FormData()
-    files.forEach((file) => formData.append('files', file))
-
     setIsUploading(true)
+    setUploadProgress(1)
+    setUploadError('')
     setShowSourceModal(false)
 
     try {
-      const { response, data } = await fetchJson(`${API_BASE}/index`, {
-        method: 'POST',
-        body: formData,
-      })
+      const uploadedFiles = []
 
-      if (!response.ok) {
-        throw new Error(data?.error || 'Upload failed')
+      for (const file of files) {
+        setUploadingFileName(file.name)
+        const uploadedFile = await uploadFileToCloudinary(file)
+        uploadedFiles.push({
+          ...uploadedFile,
+          fileKind: getFileKind(uploadedFile.mimeType, uploadedFile.originalName),
+        })
       }
 
-      const fileSources = (data.jobs || []).map(({ jobId, file }) => {
-        const fileKind = getFileKind(file.mimeType, file.originalName)
-        return {
+      const cloudinarySources = []
+
+      for (const uploadedFile of uploadedFiles) {
+        const { response, data } = await fetchJson(`${API_BASE}/index/cloudinary`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cloudinaryUrl: uploadedFile.secure_url,
+            publicId: uploadedFile.public_id,
+            originalName: uploadedFile.originalName,
+            mimeType: uploadedFile.mimeType,
+            size: uploadedFile.size,
+            resourceType: uploadedFile.resource_type,
+            folder: `synqra/${user?.id || 'guest'}`,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(data?.error || 'Queueing failed')
+        }
+
+        const source = {
           id: `source-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          name: file.originalName,
+          name: data.file.originalName,
           status: 'indexing',
           updatedAt: 'Processing',
           preview: 'Queued for indexing',
-          accent: getSourceColor('file', file.mimeType),
-          fileUrl: fileKind === 'image' || fileKind === 'pdf' ? `${SOURCE_BASE}/${file.storedAs}` : null,
+          accent: getSourceColor('file', data.file.mimeType),
           sourceType: 'file',
-          mimeType: file.mimeType,
-          fileKind,
-          storedAs: file.storedAs,
-          jobId,
-          url: null,
+          mimeType: data.file.mimeType,
+          fileKind: getFileKind(data.file.mimeType, data.file.originalName),
+          url: data.file.secureUrl,
+          secureUrl: data.file.secureUrl,
+          publicId: data.file.publicId,
+          size: data.file.size,
+          jobId: data.jobId,
         }
-      })
 
-      setSources((current) => [...fileSources, ...current])
-      setSelectedSourceId(fileSources[0]?.id ?? null)
+        cloudinarySources.push(source)
+      }
+
+      setSources((current) => [...cloudinarySources, ...current])
+      setSelectedSourceId(cloudinarySources[0]?.id ?? null)
       setShowViewer(true)
+      setUploadProgress(100)
 
-      fileSources.forEach((source) => {
+      cloudinarySources.forEach((source) => {
         pollIndexJob(source.jobId, source.id)
       })
     } catch (error) {
       console.error('Upload error:', error)
+      setUploadError(error.message || 'Upload failed. Please try again.')
     } finally {
       setIsUploading(false)
+      setUploadingFileName('')
+      setUploadProgress(0)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
@@ -822,7 +933,7 @@ function App() {
     let lastIndex = 0
 
     for (const match of text.matchAll(regex)) {
-      const index = match.index
+      const index = match.index ?? 0
       const value = match[0]
 
       if (index > lastIndex) {
@@ -843,9 +954,18 @@ function App() {
     }
 
     return tokens.map((token, index) => {
-      if (token.type === 'text') return <span key={`text-${index}`}>{token.value}</span>
-      if (token.style === 'bold') return <strong key={`bold-${index}`}>{token.value}</strong>
-      if (token.style === 'italic') return <em key={`italic-${index}`}>{token.value}</em>
+      if (token.type === 'text') {
+        return <span key={`text-${index}`}>{token.value}</span>
+      }
+
+      if (token.style === 'bold') {
+        return <strong key={`bold-${index}`}>{token.value}</strong>
+      }
+
+      if (token.style === 'italic') {
+        return <em key={`italic-${index}`}>{token.value}</em>
+      }
+
       return (
         <code key={`code-${index}`} className="inline-code">
           {token.value}
@@ -869,7 +989,9 @@ function App() {
         return (
           <ul key={`list-${blockIndex}`} className="answer-list">
             {lines.map((line, index) => (
-              <li key={`item-${index}`}>{formatInlineText(line.replace(/^[-*]\s+/, ''))}</li>
+              <li key={`item-${index}`}>
+                {formatInlineText(line.replace(/^[-*]\s+/, ''))}
+              </li>
             ))}
           </ul>
         )
@@ -879,7 +1001,9 @@ function App() {
         return (
           <ol key={`num-list-${blockIndex}`} className="answer-list numbered-list">
             {lines.map((line, index) => (
-              <li key={`numbered-item-${index}`}>{formatInlineText(line.replace(/^\d+\.\s+/, ''))}</li>
+              <li key={`numbered-item-${index}`}>
+                {formatInlineText(line.replace(/^\d+\.\s+/, ''))}
+              </li>
             ))}
           </ol>
         )
@@ -1163,6 +1287,36 @@ function App() {
             {isUploading ? 'Uploading...' : '+ Add Source'}
           </Button>
 
+          {uploadError ? (
+            <div className="upload-error-banner" role="alert">
+              {uploadError}
+            </div>
+          ) : null}
+
+          {isUploading && (
+            <div className="premium-upload-card" aria-live="polite">
+              <div className="upload-orbital" aria-hidden="true">
+                <div className="upload-orbital-core">
+                  <span>{uploadProgress}%</span>
+                </div>
+              </div>
+
+              <div className="upload-copy">
+                <p className="upload-title">Uploading to Cloudinary</p>
+                <p className="upload-subtitle">{uploadingFileName || 'Preparing secure upload...'}</p>
+              </div>
+
+              <div className="premium-progress-track" aria-label="Upload progress">
+                <div className="premium-progress-fill" style={{ width: `${uploadProgress}%` }} />
+              </div>
+
+              <div className="premium-progress-meta">
+                <span>Secure transfer</span>
+                <strong>{uploadProgress}% complete</strong>
+              </div>
+            </div>
+          )}
+
           <input
             ref={fileInputRef}
             type="file"
@@ -1184,7 +1338,7 @@ function App() {
                   key={source.id}
                   type="button"
                   onClick={() => setSelectedSourceId(source.id)}
-                  className={`source-item ${selectedSourceId === source.id ? 'selected' : ''}`} 
+                  className={`source-item ${selectedSourceId === source.id ? 'selected' : ''}`}
                 >
                   <div className={`source-preview-icon ${source.accent || 'violet'}`}>
                     {source.sourceType === 'website' ? <Globe className="h-4 w-4" /> : source.sourceType === 'youtube' ? <Video className="h-4 w-4" /> : source.sourceType === 'text' ? <MessageSquareText className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
