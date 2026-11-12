@@ -1,13 +1,16 @@
+import { serverConfig } from "../config/index.js";
 
 export const SESSION_COOKIE_NAME = "synqra_session";
 
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-const sameSite = process.env.SESSION_COOKIE_SAME_SITE || "lax";
+const isProduction = serverConfig.APP_ENV === "production";
+const sameSite = (
+  process.env.SESSION_COOKIE_SAME_SITE ||
+  (isProduction ? "none" : "lax")
+).trim().toLowerCase();
 
-const secure =
-  process.env.SESSION_COOKIE_SECURE === "true" ||
-  process.env.NODE_ENV === "production";
+const secure = (process.env.SESSION_COOKIE_SECURE || String(isProduction)).toLowerCase() === "true";
 
 // SameSite=None requires Secure.
 if (sameSite === "none" && !secure) {

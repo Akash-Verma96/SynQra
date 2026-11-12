@@ -6,12 +6,14 @@ import { createSession } from "../services/session.service.js";
 import {SESSION_COOKIE_NAME,sessionCookieOptions,clearSessionCookieOptions} from "../utils/session.utils.js";
 import {revokeSession,} from "../services/session.service.js";
 
+const isProduction = serverConfig.APP_ENV === "production";
+
 export const googleLogin = (req, res) => {
   const state = generateOAuthState();
 
   res.cookie("oauth_state", state, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isProduction,
     sameSite: "lax",
     maxAge: 5 * 60 * 1000,
     path: "/",
@@ -26,7 +28,7 @@ export const googleLogin = (req, res) => {
   return res.redirect(authorizationUrl);
 };
 
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const FRONTEND_URL = serverConfig.frontendUrl;
 
 export const googleCallback = async (req, res) => {
   try {
@@ -44,7 +46,7 @@ export const googleCallback = async (req, res) => {
     // Clear OAuth state cookie
     res.clearCookie("oauth_state", {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: isProduction,
       sameSite: "lax",
       path: "/",
     });

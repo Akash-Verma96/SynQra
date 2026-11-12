@@ -18,7 +18,18 @@ export const findOrCreateGoogleUser = async (googleUser) => {
     });
 
     if (existingAccount) {
-      return existingAccount.user;
+      const existingUser = existingAccount.user;
+
+      if (picture && picture !== existingUser.avatarUrl) {
+        return tx.user.update({
+          where: { id: existingUser.id },
+          data: { avatarUrl: picture },
+        });
+      }
+
+      console.log("Found existing user:", existingUser);
+
+      return existingUser;
     }
 
     // Check existing email
@@ -48,6 +59,8 @@ export const findOrCreateGoogleUser = async (googleUser) => {
         },
       },
     });
+
+    console.log("Created new user:", user);
 
     return user;
   });
