@@ -28,9 +28,10 @@ import {
 
 import { Button } from './components/ui/button.jsx'
 import { Input } from './components/ui/input.jsx'
+import { appConfig } from './config/environment.js'
 
-const API_BASE = 'http://localhost:3001/api/v1'
-const SOURCE_BASE = 'http://localhost:3001/uploads'
+const API_BASE = appConfig.apiBaseUrl
+const SOURCE_BASE = appConfig.uploadsBaseUrl
 
 const SOURCE_OPTIONS = [
   { id: 'pdf', label: 'PDF', icon: FileText, accent: 'violet', description: 'Upload in one click' },
@@ -209,6 +210,7 @@ function buildYoutubeEmbedUrl(url) {
 
 function App() {
   const [user, setUser] = useState(null)
+  const [profileImageFailed, setProfileImageFailed] = useState(false)
   const [authState, setAuthState] = useState('checking')
   const [authReady, setAuthReady] = useState(false)
   const [isAuthenticating, setIsAuthenticating] = useState(false)
@@ -237,6 +239,12 @@ function App() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadingFileName, setUploadingFileName] = useState('')
   const [uploadError, setUploadError] = useState('')
+
+  const profileImage = user?.avatarUrl || user?.picture || user?.imageUrl || null
+
+  useEffect(() => {
+    setProfileImageFailed(false)
+  }, [user?.id, profileImage])
 
   const fetchJson = async (endpoint, options = {}) => {
     const response = await fetch(endpoint, { credentials: 'include', ...options })
@@ -313,17 +321,6 @@ function App() {
     () => sources.find((source) => source.id === selectedSourceId) ?? sources[0] ?? null,
     [selectedSourceId, sources],
   )
-
-  const getProfileImage = () => {
-    if (user?.avatarUrl) return user.avatarUrl
-    if (user?.picture) return user.picture
-    if (user?.imageUrl) return user.imageUrl
-    if (user?.email) {
-      const initials = (user.name || user.email).trim().charAt(0).toUpperCase() || 'S'
-      return `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email)}&background=3b82f6&color=ffffff&size=128&rounded=true&bold=true&format=png`
-    }
-    return null
-  }
 
   const handleGoogleLogin = () => {
     setAuthError('')
@@ -1366,10 +1363,16 @@ function App() {
             <div className="topbar-right">
               <div className="profile-badge-shell">
                 <div className="profile-badge">
-                  {getProfileImage() ? (
-                    <img src={getProfileImage()} alt={user?.name || 'Profile'} className="profile-avatar" />
+                  {profileImage && !profileImageFailed ? (
+                    <img
+                      src={profileImage}
+                      alt={user?.name || 'Profile'}
+                      className="profile-avatar"
+                      referrerPolicy="no-referrer"
+                      onError={() => setProfileImageFailed(true)}
+                    />
                   ) : (
-                    <span>{(user?.name || 'S').charAt(0).toUpperCase()}</span>
+                    <span>{(user?.name || user?.email || 'S').charAt(0).toUpperCase()}</span>
                   )}
                 </div>
                 <div className="profile-copy">
