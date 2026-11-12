@@ -35,6 +35,7 @@ export function setUpIndexWorker(){
             documents = await loadSource(job.data.filePath);
         }
 
+        console.log(`🔄 Processing Indexing name: ${job.data.originalName} - ${documents.length} documents loaded`) ;
         const result = await indexDocuments(documents,{
             userId: job.data.userId,
             metadata: documents.metadata
@@ -48,7 +49,12 @@ export function setUpIndexWorker(){
     })
 
     indexWorker.on("completed", (job) => console.log(`✅ indexing job ${job.id} completed`));
-    indexWorker.on("failed", (job, err) => console.error(`❌ indexing job ${job?.id} failed:`, err.message));
+    indexWorker.on("failed", (job, err) => {
+        console.error(`❌ Indexing job ${job?.id} failed`);
+        console.error("Error:", err);
+        console.error("Stack:", err?.stack);
+        console.error("Cause:", err?.cause);
+    });
 }
 
 export function setUpQUERYWorker(){
@@ -68,7 +74,12 @@ export function setUpQUERYWorker(){
     })
 
     queryWorker.on("completed", (job) => console.log(`✅ Query job ${job.id} completed`));
-    queryWorker.on("failed", (job, err) => console.error(`❌ Query job ${job?.id} failed:`, err.message));
+    queryWorker.on("failed", (job, err) => {
+        console.error(`❌ Indexing job ${job?.id} failed`);
+        console.error("Error:", err);
+        console.error("Stack:", err?.stack);
+        console.error("Cause:", err?.cause);
+    });
 }
 
 export function setUpCrwalWorker(){
@@ -104,7 +115,12 @@ export function setUpCrwalWorker(){
     })
 
     crwalWorker.on("completed", (job) => console.log(`✅ Crawaler job ${job.id} completed`));
-    crwalWorker.on("failed", (job, err) => console.error(`❌ Crawaler job ${job?.id} failed:`, err.message));
+    crwalWorker.on("failed", (job, err) => {
+        console.error(`❌ Indexing job ${job?.id} failed`);
+        console.error("Error:", err);
+        console.error("Stack:", err?.stack);
+        console.error("Cause:", err?.cause);
+    });
 }
 
 export function setUpYtWorker(){
@@ -144,5 +160,10 @@ export function setUpYtWorker(){
     })
 
     ytWorker.on("completed", (job) => console.log(`✅ YT transcript job ${job.id} completed`));
-    ytWorker.on("failed", (job, err) => console.error(`❌ YT transcript job ${job?.id} failed:`, err.message));
+    ytWorker.on("failed", (job, err) => {
+        console.error(`❌ Indexing job ${job?.id} failed`);
+        console.error("Error:", err);
+        console.error("Stack:", err?.stack);
+        console.error("Cause:", err?.cause);
+    });
 }

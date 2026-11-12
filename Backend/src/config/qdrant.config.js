@@ -28,13 +28,13 @@ export function getEmbeddings() {
 
 
 // Reuse Qdrant connection and embedding instance.
+
 export async function getVectorStore() {
   if (!vectorStoreInstance) {
     vectorStoreInstance = await QdrantVectorStore.fromExistingCollection(
       getEmbeddings(),
       {
-        url: serverConfig.qdrant.url,
-        apiKey: serverConfig.qdrant.apiKey,
+        client: qdrantClient,
         collectionName: serverConfig.qdrant.collection,
       }
     );
