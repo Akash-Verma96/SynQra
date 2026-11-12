@@ -1,4 +1,4 @@
-import googleClient from "../config/googleOauth.js";
+import googleClient from "../config/googleOAuth.js";
 import { serverConfig } from "../config/index.js";
 import { generateOAuthState } from "../utils/oauth.utils.js";
 import { findOrCreateGoogleUser } from "../services/auth.service.js";
