@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "postinstall": "prisma skills sync || exit 0",
+    "start": "node src/server.js",
     "migrate:qdrant": "node src/migrations/qdrant/001-create-user-payload-index.js"
   },
   "keywords": [],
