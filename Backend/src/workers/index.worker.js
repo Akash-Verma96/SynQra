@@ -12,6 +12,7 @@ import { YT_QUEUE } from "../queues/ytTranscript.queue.js";
 import { getYoutubeTranscript } from "../utils/youtubeTranscript.js";
 import { loadCloudinarySource } from "../utils/loadCloudinarySourcs.js";
 import { Document } from "@langchain/core/documents";
+import { loadWebsitePages } from "../loaders/website.loader.js";
 
 export function setUpIndexWorker(){
     const indexWorker = new Worker(INDEX_QUEUE, async (job)=>{
@@ -24,6 +25,7 @@ export function setUpIndexWorker(){
         console.log(`🔄 Processing Indexing name: ${job.data.originalName} (${sourceType})`);
 
         let documents;
+        console.log(sourceType);
 
         if (sourceType === "cloudinary") {
             if (!job.data.cloudinaryUrl) {
@@ -31,8 +33,8 @@ export function setUpIndexWorker(){
             }
 
             documents = await loadCloudinarySource(job.data.cloudinaryUrl, job.data.originalName);
-        } else {
-            documents = await loadSource(job.data.filePath);
+        } else if (sourceType === "website") {
+            documents = await loadWebsitePages(job.data.pages);
         }
 
         console.log(`🔄 Processing Indexing name: ${job.data.originalName} - ${documents.length} documents loaded`) ;
@@ -103,7 +105,8 @@ export function setUpCrwalWorker(){
 
         const indexingJob = await addToIndexQueue({
             userId: job.data.userId,
-            filePath: website.filePath,
+            sourceType: "website",
+            pages: website.pages,
             originalName: website.fileName,
             mimeType: website.mimetype,
             size: website.totalPages,
