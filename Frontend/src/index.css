@@ -1767,3 +1767,15 @@ h1, h2, h3, p {
   color: #f0f9ff;
   font-weight: 600;
 }
+
+.auth-loader {
+  width: 24px;
+  height: 24px;
+  animation: auth-spin 1s linear infinite;
+}
+
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
