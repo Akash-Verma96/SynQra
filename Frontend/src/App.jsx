@@ -37,7 +37,7 @@ const SOURCE_OPTIONS = [
   { id: 'pdf', label: 'PDF', icon: FileText, accent: 'violet', description: 'Upload in one click',disabled: false },
   { id: 'docx', label: 'DOCX', icon: FileText, accent: 'blue', description: 'Word documents',disabled: false },
   // { id: 'image', label: 'Image', icon: FileImage, accent: 'amber', description: 'PNG / JPG / GIF', disabled: false },
-  { id: 'website', label: 'Website URL', icon: Globe, accent: 'cyan', description: 'Crawl and index pages', disabled: false },
+  { id: 'website', label: 'Website URL', icon: Globe, accent: 'cyan', description: 'Crawl and index pages', disabled: true },
   { id: 'youtube', label: 'YouTube URL', icon: Video, accent: 'rose', description: 'Transcript and index', disabled: true },
   { id: 'text', label: 'Text', icon: MessageSquareText, accent: 'emerald', description: 'Paste a note or snippet', disabled: false },
 ]
