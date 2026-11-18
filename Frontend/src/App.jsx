@@ -34,12 +34,12 @@ const API_BASE = appConfig.apiBaseUrl
 const SOURCE_BASE = appConfig.uploadsBaseUrl
 
 const SOURCE_OPTIONS = [
-  { id: 'pdf', label: 'PDF', icon: FileText, accent: 'violet', description: 'Upload in one click' },
-  { id: 'docx', label: 'DOCX', icon: FileText, accent: 'blue', description: 'Word documents' },
-  // { id: 'image', label: 'Image', icon: FileImage, accent: 'amber', description: 'PNG / JPG / GIF' },
-  { id: 'website', label: 'Website URL', icon: Globe, accent: 'cyan', description: 'Crawl and index pages' },
-  { id: 'youtube', label: 'YouTube URL', icon: Video, accent: 'rose', description: 'Transcript and index' },
-  { id: 'text', label: 'Text', icon: MessageSquareText, accent: 'emerald', description: 'Paste a note or snippet' },
+  { id: 'pdf', label: 'PDF', icon: FileText, accent: 'violet', description: 'Upload in one click',disabled: false },
+  { id: 'docx', label: 'DOCX', icon: FileText, accent: 'blue', description: 'Word documents',disabled: false },
+  // { id: 'image', label: 'Image', icon: FileImage, accent: 'amber', description: 'PNG / JPG / GIF', disabled: false },
+  { id: 'website', label: 'Website URL', icon: Globe, accent: 'cyan', description: 'Crawl and index pages', disabled: false },
+  { id: 'youtube', label: 'YouTube URL', icon: Video, accent: 'rose', description: 'Transcript and index', disabled: true },
+  { id: 'text', label: 'Text', icon: MessageSquareText, accent: 'emerald', description: 'Paste a note or snippet', disabled: false },
 ]
 
 const INSIGHT_TABS = [
@@ -1164,11 +1164,14 @@ function App() {
             </div>
 
             <div className="source-option-grid">
-              {SOURCE_OPTIONS.map(({ id, label, icon: Icon, accent, description }) => (
+              {SOURCE_OPTIONS.map(({ id, label, icon: Icon, accent, description, disabled }) => (
                 <button
                   key={id}
                   type="button"
-                  className="source-option-card"
+                  className={`source-option-card ${
+                      disabled ? 'disabled:cursor-not-allowed disabled:opacity-50' : ''
+                    }`}
+                  disabled={disabled}
                   onClick={() => {
                     if (id === 'pdf' || id === 'docx' || id === 'image') {
                       setSelectedUploadType(id)
